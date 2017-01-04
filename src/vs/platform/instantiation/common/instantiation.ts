@@ -181,7 +181,7 @@ function storeServiceDependency(id: Function, target: Function, index: number, o
 }
 
 /**
- * A *only* valid way to create a {{ServiceIdentifier}}.
+ * The *only* valid way to create a {{ServiceIdentifier}}.
  */
 export function createDecorator<T>(serviceId: string): { (...args: any[]): void; type: T; } {
 
