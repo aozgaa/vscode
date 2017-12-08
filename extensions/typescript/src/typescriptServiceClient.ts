@@ -655,15 +655,65 @@ export default class TypeScriptServiceClient implements ITypeScriptServiceClient
 			const errorPrefix = 'Error processing request. ';
 			if (errorText.startsWith(errorPrefix)) {
 				const prefixFreeErrorText = errorText.substr(errorPrefix.length);
-				const newlineIndex = prefixFreeErrorText.indexOf('\n');
-				if (newlineIndex >= 0) {
-					// Newline expected between message and stack.
-					properties['message'] = prefixFreeErrorText.substring(0, newlineIndex);
-					properties['stack'] = prefixFreeErrorText.substring(newlineIndex + 1);
-				}
+				// const newlineIndex = prefixFreeErrorText.indexOf('\n');
+				// if (newlineIndex >= 0) {
+				// Newline expected between message and stack.
+				const { message, stack } = this.parseStack(prefixFreeErrorText);
+				properties['message'] = message; // prefixFreeErrorText.substring(0, newlineIndex);
+				properties['stack'] = stack; // prefixFreeErrorText.substring(newlineIndex + 1);
+
+				// }
 			}
 		}
 		return properties;
+	}
+
+	private parseStack(stack: string): { message: string, stack: string } {
+		const stackLines = stack.split(/\r?\n|\r/);
+		const message = stackLines[0];
+
+		const cleanedStackLines: string[] = [];
+
+		for (var i = 1; i < stackLines.length; i++) {
+			const stackLine = stackLines[i];
+
+			// match first parens that isn't followed by a...nonymous function)
+			let pathParensIndex = 0;
+			while (pathParensIndex < stackLine.length - 1) {
+				if (stackLine[pathParensIndex] === '(') {
+					if (stackLine[pathParensIndex + 1] === 'a') {
+						// next line will be a path. do not add to stack
+						i++;
+					}
+					else {
+						break;
+					}
+				}
+				pathParensIndex++;
+			}
+
+			let pathAndLineString = stackLine.substring(pathParensIndex + 1);
+			pathAndLineString = pathAndLineString.substring(0, pathAndLineString.indexOf(')'));
+			const pathAndLineInfo = pathAndLineString.split(':');
+
+			const path = pathAndLineInfo.slice(0, pathAndLineInfo.length - 2).join(':');
+			const splitPath = path.split(/[\\/]/);
+
+			const part = {
+				name: stackLine.substring(0, pathParensIndex).trim(),
+				path,
+				scriptName: splitPath[splitPath.length - 1],
+				line: pathAndLineInfo[pathAndLineInfo.length - 2],
+				column: pathAndLineInfo[pathAndLineInfo.length - 1]
+			};
+
+			const cleanedStackLine = `${part.name} in ${part.scriptName} (line: ${part.line}, column: ${part.column})`;
+
+			cleanedStackLines.push(cleanedStackLine);
+		}
+
+		let cleanedStack = cleanedStackLines.join('\n');
+		return { message, stack: cleanedStack };
 	}
 
 	private sendNextRequests(): void {
